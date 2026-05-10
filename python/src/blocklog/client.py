@@ -44,7 +44,7 @@ class BlocklogClient:
     def instrument_openai_agents(self) -> "BlocklogClient":
         return instrument_openai_agents(self)
 
-    def instrument_langchain(self) -> "BlocklogClient":
+    def instrument_langchain(self):
         return instrument_langchain(self)
 
     def instrument_langgraph(self) -> "BlocklogClient":
@@ -113,7 +113,8 @@ class BlocklogClient:
             "agent_metadata": envelope.agent_metadata,
         }
         payload = apply_hooks(payload, self.hooks)
-        payload["log_signature"] = pseudo_sign(payload)
+        if self.config.signing_key:
+            payload["log_signature"] = pseudo_sign(payload, private_key=self.config.signing_key)
         return payload
 
     @staticmethod

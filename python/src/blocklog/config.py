@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field
 class BlocklogConfig(BaseModel):
     base_url: str = Field(default_factory=lambda: getenv("BLOCKLOG_BASE_URL", "http://127.0.0.1:8000/api/v1"))
     api_key: str = Field(default_factory=lambda: getenv("BLOCKLOG_API_KEY", ""))
-    timeout: float = 10.0
-    max_retries: int = 3
-    batch_size: int = 100
-    flush_interval: float = 2.0
+    signing_key: str = Field(default_factory=lambda: getenv("BLOCKLOG_SDK_SIGNING_KEY", ""))
+    timeout: float = Field(default_factory=lambda: float(getenv("BLOCKLOG_TIMEOUT", "10")))
+    max_retries: int = Field(default_factory=lambda: int(getenv("BLOCKLOG_MAX_RETRIES", "3")))
+    batch_size: int = Field(default_factory=lambda: int(getenv("BLOCKLOG_BATCH_SIZE", "100")))
+    flush_interval: float = Field(default_factory=lambda: float(getenv("BLOCKLOG_FLUSH_INTERVAL", "2")))
 
     @classmethod
     def from_env(cls) -> "BlocklogConfig":
