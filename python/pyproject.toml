@@ -1,7 +1,7 @@
 [project]
 name = "blocklog"
-version = "0.1.0"
-description = "Accountability infrastructure SDK for AI agents"
+version = "0.2.0"
+description = "Infrastructure for AI Decision-Making — record, replay, verify, and govern AI agent decisions"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

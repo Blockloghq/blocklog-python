@@ -3,6 +3,13 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import Any
 
+from blocklog.api.approval import ApprovalClient
+from blocklog.api.compliance import ComplianceClient
+from blocklog.api.decisions import DecisionsClient
+from blocklog.api.incidents import IncidentsClient
+from blocklog.api.replay import ReplayClient
+from blocklog.api.traces import TracesClient
+from blocklog.api.verify import VerifyClient
 from blocklog.batching.buffer import EventBuffer
 from blocklog.config import BlocklogConfig
 from blocklog.context.managers import agent_session
@@ -19,6 +26,37 @@ from blocklog.transport.retry import RetryPolicy
 
 
 class BlocklogClient:
+    """The Blocklog client.
+
+    Most users should call ``blocklog.init(api_key=...)`` instead of
+    instantiating this class directly.  The global client is then
+    accessible to all module-level helpers (``decision``, ``approval``,
+    ``incident``, ``replay``, ``verify``, ``compliance``).
+
+    For advanced control, instantiate this class directly::
+
+        from blocklog import BlocklogClient, BlocklogConfig
+
+        client = BlocklogClient(BlocklogConfig(api_key="blk_..."))
+
+    Attributes
+    ----------
+    decisions : DecisionsClient
+        Layer 2 client for AI Decision records.
+    incidents : IncidentsClient
+        Layer 2 client for the incident lifecycle.
+    approval : ApprovalClient
+        Layer 2 client for HITL approval workflows.
+    replay : ReplayClient
+        Layer 2 client for forensic replay sessions.
+    compliance : ComplianceClient
+        Layer 2 client for compliance report generation.
+    verify : VerifyClient
+        Layer 2 client for cryptographic verification.
+    traces : TracesClient
+        Layer 2 client for trace/session queries.
+    """
+
     def __init__(self, config: BlocklogConfig) -> None:
         self.config = config
         self.transport = SyncTransport(
@@ -28,39 +66,61 @@ class BlocklogClient:
         )
         self.retry = RetryPolicy(max_retries=config.max_retries)
         self.buffer = EventBuffer(batch_size=config.batch_size)
-        self.hooks = []
-        
-        self.incidents = IncidentsApi(self)
-        self.decisions = DecisionsApi(self)
-        self.forensics = ForensicsApi(self)
-        self.hitl = HITLApi(self)
+        self.hooks: list = []
+
+        # ── Layer 2 domain sub-clients ────────────────────────────────
+        self.decisions = DecisionsClient(self)
+        self.incidents = IncidentsClient(self)
+        self.approval = ApprovalClient(self)
+        self.replay = ReplayClient(self)
+        self.compliance = ComplianceClient(self)
+        self.verify = VerifyClient(self)
+        self.traces = TracesClient(self)
+
+        # ── Legacy aliases (backward compatibility) ───────────────────
+        # These point to the same new clients so old code keeps working.
+        self.forensics = self.replay   # client.forensics.compare(...) still works
+        self.hitl = self.approval      # client.hitl.reject(...) still works
 
     @classmethod
     def from_env(cls) -> "BlocklogClient":
+        """Create a client configured entirely from environment variables."""
         return cls(BlocklogConfig.from_env())
 
     def add_hook(self, hook) -> "BlocklogClient":
+        """Register a middleware hook applied to every outbound event payload."""
         self.hooks.append(hook)
         return self
 
     def session(self, *, agent_id: str | None = None, source: str = "python-sdk", workflow_id=None):
+        """Open an ``agent_session`` context manager (backward-compatible).
+
+        Prefer the ``@blocklog.agent`` decorator for new code.
+        """
         return agent_session(agent_id=agent_id, source=source, workflow_id=workflow_id)
 
     def instrument_openai_agents(self) -> "BlocklogClient":
+        """Auto-instrument the OpenAI Agents SDK."""
         return instrument_openai_agents(self)
 
-    def instrument_langchain(self):
+    def instrument_langchain(self) -> "BlocklogClient":
+        """Auto-instrument LangChain."""
         return instrument_langchain(self)
 
     def instrument_langgraph(self) -> "BlocklogClient":
+        """Auto-instrument LangGraph."""
         return instrument_langgraph(self)
 
+    # ── Low-level event ingest (Layer 3) ─────────────────────────────
+
     def event(self, event_type: str, payload: dict[str, Any], **kwargs) -> IngestResponse:
+        """Emit a single event immediately (synchronous)."""
         envelope = self._build_event(event_type=event_type, payload=payload, **kwargs)
         result = self.retry.run(lambda: self.transport.request("POST", "/logs", json=self._serialize(envelope)))
         return IngestResponse.model_validate(result)
 
     def enqueue(self, event_type: str, payload: dict[str, Any], **kwargs):
+        """Enqueue an event for batched delivery."""
         envelope = self._build_event(event_type=event_type, payload=payload, **kwargs)
         batch = self.buffer.add(envelope)
         if batch:
@@ -68,6 +128,7 @@ class BlocklogClient:
         return None
 
     def flush(self, *, batch=None):
+        """Flush the event buffer, sending all queued events."""
         batch = batch or self.buffer.flush()
         if not batch:
             return {"ingested": 0, "log_ids": []}
@@ -131,55 +192,3 @@ class BlocklogClient:
         ).hexdigest()[:32]
         return f"blk_{digest}"
 
-
-class IncidentsApi:
-    def __init__(self, client: BlocklogClient):
-        self.client = client
-
-    def assign(self, incident_id: str, assignee: str, notes: str | None = None) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", f"/incidents/{incident_id}/assign", json={"assignee": assignee, "notes": notes}))
-
-    def resolve(self, incident_id: str, resolution_summary: str, root_cause: Any = None, remediation_actions: Any = None) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", f"/incidents/{incident_id}/resolve", json={"resolution_summary": resolution_summary, "root_cause": root_cause, "remediation_actions": remediation_actions}))
-
-    def close(self, incident_id: str, closure_notes: str, approval_status: str = "approved") -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", f"/incidents/{incident_id}/close", json={"closure_notes": closure_notes, "approval_status": approval_status}))
-
-    def generate_report(self, incident_id: str) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", f"/incidents/{incident_id}/report", json={}))
-
-
-class DecisionsApi:
-    def __init__(self, client: BlocklogClient):
-        self.client = client
-        
-    def get_timeline(self, decision_id: str) -> list:
-        return self.client.retry.run(lambda: self.client.transport.request("GET", f"/decisions/{decision_id}/timeline"))
-
-    def get_evidence(self, decision_id: str) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("GET", f"/decisions/{decision_id}/evidence"))
-
-
-class ForensicsApi:
-    def __init__(self, client: BlocklogClient):
-        self.client = client
-        
-    def compare(self, baseline_session_id: str, candidate_session_id: str) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", "/forensics/compare", json={"baseline_session_id": baseline_session_id, "candidate_session_id": candidate_session_id}))
-
-    def get_comparison(self, comparison_id: str) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("GET", f"/forensics/compare/{comparison_id}"))
-
-
-class HITLApi:
-    def __init__(self, client: BlocklogClient):
-        self.client = client
-        
-    def reject(self, reviewer: str, rejection_reason: str) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", "/hitl/reject", json={"reviewer": reviewer, "rejection_reason": rejection_reason}))
-
-    def escalate(self, current_reviewer: str, escalation_target: str, escalation_reason: str) -> dict:
-        return self.client.retry.run(lambda: self.client.transport.request("POST", "/hitl/escalate", json={"current_reviewer": current_reviewer, "escalation_target": escalation_target, "escalation_reason": escalation_reason}))
-
-    def get_audit_trail(self) -> list:
-        return self.client.retry.run(lambda: self.client.transport.request("GET", "/hitl/audit-trail"))
