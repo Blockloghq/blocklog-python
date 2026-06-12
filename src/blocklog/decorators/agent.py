@@ -190,7 +190,6 @@ def _wrap_class(cls: type, agent_name: str, meta: dict) -> type:
 
     @functools.wraps(original_init)
     def new_init(self: Any, *args: Any, **kwargs: Any) -> None:
-        from blocklog.context.managers import agent_session
         from blocklog.context.vars import set_context
         from blocklog.models.events import SessionContext
 
