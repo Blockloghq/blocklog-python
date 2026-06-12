@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class BlocklogConfig(BaseModel):
-    base_url: str = Field(default_factory=lambda: getenv("BLOCKLOG_BASE_URL", "http://127.0.0.1:8000/api/v1"))
+    base_url: str = Field(default_factory=lambda: getenv("BLOCKLOG_BASE_URL", "https://blocklogsecurity.com/api/v1"))
     api_key: str = Field(default_factory=lambda: getenv("BLOCKLOG_API_KEY", ""))
     signing_key: str = Field(default_factory=lambda: getenv("BLOCKLOG_SDK_SIGNING_KEY", ""))
     timeout: float = Field(default_factory=lambda: float(getenv("BLOCKLOG_TIMEOUT", "10")))
