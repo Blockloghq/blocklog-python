@@ -1,5 +1,5 @@
 """Tests for public API imports and exports."""
-
+from importlib.metadata import version
 import pytest
 
 # Test that the main package can be imported
@@ -9,11 +9,14 @@ def test_import_blocklog():
     assert blocklog is not None
 
 
+from importlib.metadata import version
+
 def test_blocklog_version():
     """Test that blocklog has a version attribute."""
     import blocklog
+
     assert hasattr(blocklog, "__version__")
-    assert blocklog.__version__ == "0.2.0"
+    assert blocklog.__version__ == version("blocklog")
 
 
 def test_public_api_exports():
