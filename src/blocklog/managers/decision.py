@@ -296,6 +296,36 @@ class DecisionContext:
             logger.debug("Decision commit failed: %s", exc)
             raise BlocklogCommitError(f"Decision commit failed: {exc}") from exc
 
+    def _persist(self) -> None:
+        """Patch the decision record with inputs, outputs, tags, and approval state.
+
+        Called at the end of the ``with`` block (both clean exit and error)
+        so that data recorded during execution is written back to the
+        decision row, not just emitted as events.
+
+        This is a best-effort call: failures are logged as warnings rather
+        than raised, so they never mask the original exception in the error
+        path.
+        """
+        if self.id is None:
+            # Commit already failed; nothing to patch.
+            logger.debug("_persist skipped: no decision ID (commit failed)")
+            return
+        try:
+            from blocklog._global import get_client
+            client = get_client()
+            client.decisions.update(
+                self.id,
+                inputs=self._inputs,
+                outputs=self._outputs,
+                tags=self._tags,
+                approval_requested=self._approval_requested,
+                status=self.status,
+            )
+            logger.debug("Decision persist succeeded: id=%s", self.id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("blocklog: Decision persist failed: %s", exc)
+
     def _detect_issues(self) -> None:
         """Detect potential issues with the decision context state and record them."""
         self._issues = []
@@ -332,6 +362,7 @@ class DecisionContext:
 
     def _complete(self) -> None:
         self.status = "complete"
+        self._persist()
         self._send_event("DECISION_COMPLETE", {
             "inputs": self._inputs,
             "outputs": self._outputs,
@@ -343,6 +374,7 @@ class DecisionContext:
 
     def _error(self, exc: BaseException) -> None:
         self.status = "error"
+        self._persist()
         self._send_event("DECISION_ERROR", {
             "error_type": type(exc).__name__,
             "error_message": str(exc),
@@ -396,7 +428,7 @@ def decision(
     ------
     DecisionContext
         A live handle you can use to call ``record_input()``,
-        ```record_output()``, ``tag()``, ``request_approval()``, etc.
+        ``record_output()``, ``tag()``, ``request_approval()``, etc.
 
     Examples
     --------
