@@ -70,9 +70,11 @@ def test_event_buffer_discard_on_commit_failure():
     config = BlocklogConfig(api_key="blk_test")
     client = BlocklogClient(config)
     client.decisions.create = MagicMock(side_effect=Exception("Commit failed"))
-    
+    import importlib
+
+    decision_module = importlib.import_module("blocklog.managers.decision")
     with patch("blocklog._global.get_client", return_value=client), \
-         patch("blocklog.managers.decision.logger.warning") as mock_warning:
+    patch.object(decision_module.logger, "warning") as mock_warning:
         ctx = DecisionContext(decision_type="BUY", asset="TSLA")
         ctx.record_input(price=412.50)
         
