@@ -11,7 +11,7 @@ class IngestResponse(BaseModel):
     source: str
     idempotency_key: str | None = None
     timestamp: datetime | None = None
-    created_at: datetime
+    created_at: datetime | None = None
     trace_id: UUID | None = None
     session_id: UUID | None = None
     workflow_id: UUID | None = None
