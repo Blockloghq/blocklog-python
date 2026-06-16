@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from random import random
 from time import sleep
+import asyncio
 
 
 @dataclass(slots=True)
@@ -29,4 +30,22 @@ class RetryPolicy:
                 if attempt == self.max_retries - 1:
                     raise
                 sleep(self.backoff(attempt))
+        raise RuntimeError("retry failed") from last_error
+
+    async def run_async(self, fn):
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                return await fn()
+            except Exception as exc:  # noqa: BLE001
+                status_code = None
+                if hasattr(exc, "response") and exc.response is not None:
+                    status_code = getattr(exc.response, "status_code", None)
+                if status_code in (401, 403):
+                    raise
+
+                last_error = exc
+                if attempt == self.max_retries - 1:
+                    raise
+                await asyncio.sleep(self.backoff(attempt))
         raise RuntimeError("retry failed") from last_error

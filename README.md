@@ -93,6 +93,53 @@ if __name__ == "__main__":
     run_agent()
 ```
 
+## Signup And Teams
+
+```python
+from blocklog import (
+    AsyncBlocklogClient,
+    BlocklogClient,
+    can_manage_members,
+    can_manage_team,
+    get_primary_team,
+    is_team_owner,
+)
+
+client = BlocklogClient(
+    base_url="https://your-blocklog-host/api/v1",
+)
+
+signup = client.auth.signup(
+    username="jane",
+    email="jane@example.com",
+    password="ChangeMe123!",
+    workspace_name="Acme Security",
+)
+
+print(signup.team.name)
+print(is_team_owner(signup.team, signup.user.user_id))
+print(signup.team.owner_user_id)
+
+client.set_access_token(signup.token)
+
+teams = client.teams.list()
+primary_team = get_primary_team(teams)
+
+if primary_team and can_manage_team(primary_team, signup.user.user_id):
+    client.teams.update(primary_team.id, default_sla_minutes=30)
+    members = client.teams.members.list(primary_team.id)
+    if members and can_manage_members(members[0]):
+        client.teams.notify_test(primary_team.id)
+
+
+async def async_example() -> None:
+    async_client = AsyncBlocklogClient(base_url="https://your-blocklog-host/api/v1")
+    login = await async_client.auth.login("jane@example.com", "ChangeMe123!")
+    async_client.set_access_token(login.token)
+    teams = await async_client.teams.list()
+    print(teams)
+```
+
 ---
 
 ## What Happens Under The Hood?
@@ -162,6 +209,8 @@ We provide several runnable scripts in the `examples/` directory to help you und
 - **Retry Handling**: Built-in exponential backoff for transient network issues.
 - **Signing**: Optional Ed25519 payload signing for tamper-evident, cryptographically verifiable logs.
 - **Middleware Hooks**: Add custom logic to redact PII or inject metadata before payloads leave your server.
+- **Typed Team APIs**: Ownership-aware models for teams, members, and signup responses.
+- **Standardized Exceptions**: Authentication, authorization, validation, conflict, rate-limit, and server error mapping.
 
 Read our [Production Best Practices](docs/production.md) for more details.
 
@@ -180,6 +229,7 @@ Blocklog can be configured via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BLOCKLOG_API_KEY` | Your Blocklog API key | `""` |
+| `BLOCKLOG_ACCESS_TOKEN` | User access token for dashboard-style APIs | `""` |
 | `BLOCKLOG_BASE_URL` | API base URL | `http://127.0.0.1:8000/api/v1` |
 | `BLOCKLOG_SDK_SIGNING_KEY` | Optional seed key for hash signing | `""` |
 | `BLOCKLOG_TIMEOUT` | Request timeout in seconds | `10` |
@@ -221,6 +271,20 @@ If the SDK cannot connect to the Blocklog API:
 2. Check that `BLOCKLOG_BASE_URL` points to the correct endpoint
 3. Ensure network connectivity to the API server
 4. Check firewall settings
+
+## Teams API
+
+```python
+from blocklog import BlocklogClient
+
+client = BlocklogClient(access_token="user-token")
+
+teams = client.teams.list()
+team = client.teams.get(teams[0].id)
+members = client.teams.members.list(team.id)
+result = client.teams.notify_test(team.id)
+print(result.results)
+```
 
 ## Links
 

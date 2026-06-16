@@ -10,15 +10,17 @@ from blocklog.config import BlocklogConfig
 
 def test_config_default_values():
     """Test that BlocklogConfig has correct default values."""
-    config = BlocklogConfig()
-    
-    assert config.base_url == "https://blocklogsecurity.com/api/v1"
-    assert config.api_key == ""
-    assert config.signing_key == ""
-    assert config.timeout == 10.0
-    assert config.max_retries == 3
-    assert config.batch_size == 100
-    assert config.flush_interval == 2.0
+    with patch.dict(os.environ, {}, clear=True):
+        config = BlocklogConfig()
+
+        assert config.base_url == "https://blocklogsecurity.com/api/v1"
+        assert config.api_key == ""
+        assert config.access_token == ""
+        assert config.signing_key == ""
+        assert config.timeout == 10.0
+        assert config.max_retries == 3
+        assert config.batch_size == 100
+        assert config.flush_interval == 2.0
 
 
 def test_config_from_env():

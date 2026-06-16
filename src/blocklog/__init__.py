@@ -33,7 +33,25 @@ from blocklog._init_fn import init, health
 from blocklog.decorators.agent import agent
 from blocklog.decorators.tool import tool
 from blocklog.managers.decision import decision, DecisionContext
-from blocklog.exceptions import BlocklogError, BlocklogCommitError, BlocklogAuthError
+from blocklog.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    BlocklogAuthError,
+    BlocklogCommitError,
+    BlocklogError,
+    ConflictError,
+    NotFoundError,
+    RateLimitError,
+    ServerError,
+    ValidationError,
+)
+from blocklog.team_utils import (
+    can_manage_members,
+    can_manage_team,
+    get_primary_team,
+    is_team_admin,
+    is_team_owner,
+)
 
 # ── Tier 2: Governance & Investigation ────────────────────────────────────────
 from blocklog import approval      # noqa: E402
@@ -59,6 +77,18 @@ __all__ = [
     "BlocklogError",
     "BlocklogCommitError",
     "BlocklogAuthError",
+    "ValidationError",
+    "AuthenticationError",
+    "AuthorizationError",
+    "NotFoundError",
+    "ConflictError",
+    "RateLimitError",
+    "ServerError",
+    "is_team_owner",
+    "is_team_admin",
+    "can_manage_team",
+    "can_manage_members",
+    "get_primary_team",
 ]
 
 def __getattr__(name: str):

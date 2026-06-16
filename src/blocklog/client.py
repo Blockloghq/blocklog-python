@@ -5,10 +5,12 @@ from hashlib import sha256
 from typing import Any
 
 from blocklog.api.approval import ApprovalClient
+from blocklog.api.auth import AuthClient
 from blocklog.api.compliance import ComplianceClient
 from blocklog.api.decisions import DecisionsClient
 from blocklog.api.incidents import IncidentsClient
 from blocklog.api.replay import ReplayClient
+from blocklog.api.teams import TeamsClient
 from blocklog.api.traces import TracesClient
 from blocklog.api.verify import VerifyClient
 from blocklog.batching.buffer import EventBuffer
@@ -60,15 +62,17 @@ class BlocklogClient:
         Layer 2 client for trace/session queries.
     """
 
-    def __init__(self, config: BlocklogConfig) -> None:
-        self.config = config
+    def __init__(self, config: BlocklogConfig | None = None, **kwargs) -> None:
+        self.config = config or BlocklogConfig(**kwargs)
         self.transport = SyncTransport(
-            base_url=config.base_url,
-            api_key=config.api_key,
-            timeout=config.timeout,
+            base_url=self.config.base_url,
+            api_key=self.config.api_key,
+            access_token=self.config.access_token,
+            timeout=self.config.timeout,
+            debug=self.config.debug,
         )
-        self.retry = RetryPolicy(max_retries=config.max_retries)
-        self.buffer = EventBuffer(batch_size=config.batch_size)
+        self.retry = RetryPolicy(max_retries=self.config.max_retries)
+        self.buffer = EventBuffer(batch_size=self.config.batch_size)
         self.hooks: list = []
 
         logger.debug("Client initialized")
@@ -81,6 +85,8 @@ class BlocklogClient:
         self.compliance = ComplianceClient(self)
         self.verify = VerifyClient(self)
         self.traces = TracesClient(self)
+        self.teams = TeamsClient(self)
+        self.auth = AuthClient(self)
 
         # ── Legacy aliases (backward compatibility) ───────────────────
         # These point to the same new clients so old code keeps working.
@@ -91,6 +97,11 @@ class BlocklogClient:
     def from_env(cls) -> "BlocklogClient":
         """Create a client configured entirely from environment variables."""
         return cls(BlocklogConfig.from_env())
+
+    def set_access_token(self, token: str) -> "BlocklogClient":
+        self.transport.set_access_token(token)
+        self.config.access_token = token
+        return self
 
     def add_hook(self, hook) -> "BlocklogClient":
         """Register a middleware hook applied to every outbound event payload."""
@@ -194,4 +205,3 @@ class BlocklogClient:
             )
         ).hexdigest()[:32]
         return f"blk_{digest}"
-
