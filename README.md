@@ -289,8 +289,8 @@ print(result.results)
 
 ## Links
 
-- **Homepage**: https://blockloghq.com
-- **Documentation**: https://docs.blockloghq.com
+- **Homepage**: https://blocklogsecurity.com
+- **Documentation**: https://blocklogsecurity.com/docs
 - **Repository**: https://github.com/blockloghq/blocklog-python
 - **Issues**: https://github.com/blockloghq/blocklog-python/issues
 - **PyPI**: https://pypi.org/project/blocklog/
